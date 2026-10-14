@@ -27,6 +27,15 @@ android {
         targetCompatibility JavaVersion.VERSION_1_8
     }
 
+    signingConfigs {
+        release {
+            storeFile file('../qileys.keystore')
+            storePassword 'android123'
+            keyAlias 'qileys'
+            keyPassword 'android123'
+        }
+    }
+
     buildTypes {
         release {
             minifyEnabled false
@@ -34,15 +43,6 @@ android {
         }
         debug {
             signingConfig signingConfigs.release
-        }
-    }
-
-    signingConfigs {
-        release {
-            storeFile file('../qileys.keystore')
-            storePassword 'android123'
-            keyAlias 'qileys'
-            keyPassword 'android123'
         }
     }
 
