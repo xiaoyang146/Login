@@ -24,9 +24,11 @@
             android:screenOrientation="behind"
             android:theme="@android:style/Theme.Translucent.NoTitleBar" />
         <!-- QQ互联 SDK 必需：AuthActivity 用于拦截 tencent{appid} 回跳协议。
-             缺失会导致 Tencent.createInstance() 校验失败返回 null，SSO 失效。 -->
+             缺失会导致 Tencent.createInstance() 校验失败返回 null，SSO 失效。
+             exported=true：必须能被外部 scheme（tencent102064194://）拉起。 -->
         <activity
             android:name="com.tencent.tauth.AuthActivity"
+            android:exported="true"
             android:launchMode="singleTask"
             android:noHistory="true">
             <intent-filter>
