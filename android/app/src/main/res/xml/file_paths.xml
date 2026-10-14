@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- QQ互联 SDK 内部 FileProvider 的共享路径配置 -->
+<paths>
+    <external-path name="tencent_sdk_external" path="." />
+    <external-files-path name="tencent_sdk_ext_files" path="." />
+    <files-path name="tencent_sdk_files" path="." />
+    <cache-path name="tencent_sdk_cache" path="." />
+</paths>

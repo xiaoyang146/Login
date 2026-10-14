@@ -1,12 +1,22 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
-    <!-- 访问 MixAuth 服务需要网络 -->
+    <!-- 访问 MixAuth 服务 / QQ互联接口需要网络 -->
     <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+
+    <!--
+      Android 11 (API 30)+ 包可见性：不声明的话 SDK 探测不到 QQ/TIM 是否安装，
+      会导致本可直接 SSO 免密登录的场景被降级成 H5 网页授权。
+    -->
+    <queries>
+        <package android:name="com.tencent.mobileqq" />
+        <package android:name="com.tencent.tim" />
+    </queries>
 
     <application
         android:allowBackup="true"
-        android:label="MixAuth登录"
+        android:label="@string/app_name"
         android:theme="@android:style/Theme.Material.Light.DarkActionBar">
 
         <activity
@@ -19,7 +29,43 @@
             </intent-filter>
         </activity>
 
-        <!-- QQ互联官方 OAuth 授权页（WebView 内完成授权） -->
+        <!--
+          ============ 腾讯官方 QQ 互联 SDK 必须声明的两个 Activity ============
+          1) AuthActivity：QQ 客户端授权完成后，通过 tencent+AppID 这个自定义 scheme 回调到本应用。
+             android:scheme 必须严格等于 "tencent" + BuildConfig.QQ_APP_ID。
+          2) AssistActivity：SDK 内部用于在"拉起 QQ / 打开 H5"之间中转，必须带下面的 theme 与 configChanges。
+        -->
+        <activity
+            android:name="com.tencent.tauth.AuthActivity"
+            android:exported="true"
+            android:launchMode="singleTask"
+            android:noHistory="true">
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="tencent102064194" />
+            </intent-filter>
+        </activity>
+
+        <activity
+            android:name="com.tencent.connect.common.AssistActivity"
+            android:configChanges="orientation|keyboardHidden|screenSize"
+            android:screenOrientation="behind"
+            android:theme="@android:style/Theme.Translucent.NoTitleBar" />
+
+        <!-- SDK 内部用 FileProvider 传递图片等，authorities 必须等于 Constants.FILE_PROVIDER_AUTHORITIES -->
+        <provider
+            android:name="android.support.v4.content.FileProvider"
+            android:authorities="com.tencent.tauth.fileprovider"
+            android:exported="false"
+            android:grantUriPermissions="true">
+            <meta-data
+                android:name="android.support.FILE_PROVIDER_PATHS"
+                android:resource="@xml/file_paths" />
+        </provider>
+
+        <!-- 旧的 WebView 授权页：保留代码但已从主入口移除（其 redirect_uri 为自定义 scheme，WebView 拦不到回调） -->
         <activity
             android:name=".QqOAuthActivity"
             android:exported="false" />

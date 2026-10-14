@@ -3,7 +3,14 @@ name: Build JAR
 on:
   push:
     branches: [main, master]
+    paths:
+      - 'src/**'
+      - 'build.sh'
+      - '.github/workflows/build.yml'
   workflow_dispatch:
+
+permissions:
+  contents: read
 
 jobs:
   build:
@@ -19,16 +26,12 @@ jobs:
           java-version: '17'
 
       - name: Compile and package
-        run: |
-          mkdir -p out build/META-INF
-          javac -encoding UTF-8 -d out $(find src -name '*.java')
-          echo "Main-Class: com.example.mixauth.MixAuthLoginApp" > build/META-INF/MANIFEST.MF
-          jar cfm mixauth-login.jar build/META-INF/MANIFEST.MF -C out .
-          ls -la mixauth-login.jar
+        run: bash build.sh
 
       - name: Smoke test (headless, no real scan)
         run: |
           timeout 30 java -jar mixauth-login.jar qq --no-gui --timeout=8 --interval=2000 || true
+          ls -la mixauth-login.jar
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4

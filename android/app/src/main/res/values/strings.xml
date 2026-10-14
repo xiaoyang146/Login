@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">QQ登录 Demo</string>
+    <string name="app_title">QQ / 微信 登录测试</string>
+    <string name="app_subtitle">QQ 走腾讯官方 OpenSDK 3.5.19（SSO 拉起手机 QQ）；微信与备用 QQ 走 MixAuth 扫码。</string>
+
+    <string name="consent_title">1. 隐私授权（必须）</string>
+    <string name="consent_body">腾讯 SDK 3.5.7 起强制要求：必须先获得用户同意，才能调用任何接口。未勾选时所有 QQ 接口都会直接返回失败。</string>
+    <string name="consent_check">我已阅读并同意《QQ互联SDK隐私保护声明》</string>
+
+    <string name="btn_qq_login">手机 QQ 一键登录（官方 SDK）</string>
+    <string name="btn_wx_login">微信扫码登录（MixAuth）</string>
+    <string name="btn_refresh_qr">重新生成二维码</string>
+    <string name="btn_logout">退出登录</string>
+
+    <string name="logged_in">已登录</string>
+    <string name="avatar_desc">用户头像</string>
+    <string name="qr_desc">登录二维码</string>
+    <string name="token_label">登录凭证（access_token 已截断显示）</string>
+
+    <string name="status_idle">等待操作…</string>
+    <string name="sdk_note">注意：QQ 官方登录要求「应用包名 + 签名 MD5」与 connect.qq.com 后台登记完全一致，否则返回 100044。</string>
+
+    <string name="qq_not_installed">未检测到手机 QQ，将使用 SDK 内置网页授权（体验略差）。可去应用商店安装手机 QQ。</string>
+</resources>

@@ -3,13 +3,19 @@ name: Build Android APK
 on:
   workflow_dispatch:
   push:
+    branches: [main, master]
     paths:
       - 'android/**'
+      - 'scripts/**'
       - '.github/workflows/android-build.yml'
+
+permissions:
+  contents: read
 
 jobs:
   build:
     runs-on: ubuntu-latest
+
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -20,31 +26,45 @@ jobs:
           distribution: temurin
           java-version: '17'
 
-      - name: Prepare Android SDK
-        run: |
-          export ANDROID_HOME=${ANDROID_HOME:-/usr/local/lib/android/sdk}
-          echo "ANDROID_HOME=$ANDROID_HOME" >> "$GITHUB_ENV"
-          SDKM="$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager"
-          if [ -x "$SDKM" ]; then
-            yes | "$SDKM" --licenses > /dev/null 2>&1 || true
-            "$SDKM" "platforms;android-34" "build-tools;34.0.0" > /dev/null 2>&1 || true
-          fi
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v3
+        with:
+          packages: 'platforms;android-34 build-tools;34.0.0 platform-tools'
 
-      - name: Build signed debug APK
+      - name: Cache Gradle
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.gradle/caches
+            ~/.gradle/wrapper
+          key: gradle-${{ runner.os }}-${{ hashFiles('android/**/*.gradle', 'android/gradle/wrapper/gradle-wrapper.properties') }}
+          restore-keys: gradle-${{ runner.os }}-
+
+      - name: Ensure QQ OpenSDK jar
+        run: bash scripts/fetch-qopensdk.sh
+
+      - name: Build APK (debug + release, 固定 keystore 签名)
+        working-directory: android
         run: |
-          cd android
           chmod +x gradlew
-          ./gradlew :app:assembleDebug --no-daemon
+          ./gradlew :app:assembleDebug :app:assembleRelease --no-daemon
 
-      - name: Verify APK signature
+      - name: Print APK signing certificate (用于填 QQ互联后台的签名 MD5)
         run: |
-          APK="android/app/build/outputs/apk/debug/app-debug.apk"
-          echo "APK MD5 (unsigned cert):"
-          unzip -p "$APK" META-INF/*.RSA 2>/dev/null | openssl x509 -inform der -noout -fingerprint -md5 2>/dev/null || \
-            keytool -printcert -jarfile "$APK" 2>/dev/null | grep -i MD5 || echo "(keytool not available, skipping)"
+          set -e
+          for APK in android/app/build/outputs/apk/debug/app-debug.apk \
+                     android/app/build/outputs/apk/release/app-release.apk; do
+            [ -f "$APK" ] || continue
+            echo "=================================================="
+            echo "APK: $APK"
+            keytool -printcert -jarfile "$APK" || true
+          done
 
-      - name: Upload APK
+      - name: Upload APKs
         uses: actions/upload-artifact@v4
         with:
-          name: mixauth-login-apk
-          path: android/app/build/outputs/apk/debug/app-debug.apk
+          name: qq-login-apk
+          if-no-files-found: error
+          path: |
+            android/app/build/outputs/apk/debug/*.apk
+            android/app/build/outputs/apk/release/*.apk
