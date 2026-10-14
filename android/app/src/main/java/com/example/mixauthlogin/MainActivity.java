@@ -111,6 +111,11 @@ public class MainActivity extends Activity {
         public void onCancel() {
             statusView.setText("QQ 登录已取消");
         }
+
+        @Override
+        public void onWarning(int i) {
+            // SDK 预留的警告回调，登录主流程无需处理
+        }
     };
 
     /** SSO 拿到 access_token/openid 后，通过 SDK 补齐昵称、头像等用户资料。 */
@@ -150,6 +155,11 @@ public class MainActivity extends Activity {
                 @Override
                 public void onCancel() {
                     statusView.setText("获取 QQ 用户资料被取消");
+                }
+
+                @Override
+                public void onWarning(int i) {
+                    // 忽略 SDK 警告回调
                 }
             });
         } catch (Exception e) {
