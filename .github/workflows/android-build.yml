@@ -30,13 +30,18 @@ jobs:
             "$SDKM" "platforms;android-34" "build-tools;34.0.0" > /dev/null 2>&1 || true
           fi
 
-      - name: Build debug APK
+      - name: Build signed debug APK
         run: |
           cd android
           chmod +x gradlew
           ./gradlew :app:assembleDebug --no-daemon
-        env:
-          QQ_APP_KEY: ${{ secrets.QQ_APP_KEY }}
+
+      - name: Verify APK signature
+        run: |
+          APK="android/app/build/outputs/apk/debug/app-debug.apk"
+          echo "APK MD5 (unsigned cert):"
+          unzip -p "$APK" META-INF/*.RSA 2>/dev/null | openssl x509 -inform der -noout -fingerprint -md5 2>/dev/null || \
+            keytool -printcert -jarfile "$APK" 2>/dev/null | grep -i MD5 || echo "(keytool not available, skipping)"
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
