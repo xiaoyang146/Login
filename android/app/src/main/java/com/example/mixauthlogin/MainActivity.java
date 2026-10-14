@@ -153,7 +153,9 @@ public class MainActivity extends Activity {
             @Override
             public void onSuccess(QqSdkAuth.Session session, QqSdkAuth.Profile cached) {
                 showSession(session, cached);
-                fetchQqProfile();
+                // 关键：把刚登录成功的 session 显式传下去，
+                // 避免 fetchProfile 读本地缓存时拿到上一个账号的 openid
+                fetchQqProfile(session);
             }
 
             @Override
@@ -170,8 +172,8 @@ public class MainActivity extends Activity {
         });
     }
 
-    private void fetchQqProfile() {
-        qq.fetchProfile(MainActivity.this, new QqSdkAuth.ProfileCallback() {
+    private void fetchQqProfile(final QqSdkAuth.Session session) {
+        qq.fetchProfile(MainActivity.this, session, new QqSdkAuth.ProfileCallback() {
             @Override
             public void onProfile(final QqSdkAuth.Profile profile) {
                 nickView.setText(profile.nickname);
@@ -192,7 +194,7 @@ public class MainActivity extends Activity {
                             @Override
                             public void onClick(View v) {
                                 nickView.setText("（正在获取昵称…）");
-                                fetchQqProfile();
+                                fetchQqProfile(session);
                             }
                         });
                         new AlertDialog.Builder(MainActivity.this)

@@ -53,6 +53,17 @@ public final class QqSdkAuth {
     /** 申请的权限，逗号分隔。只需要基础资料就写 "get_user_info"，全量可写 "all"。 */
     private static final String SCOPE = "get_user_info";
 
+    /**
+     * QQ 的 user/get_simple_userinfo 对新登录会话存在服务端同步延迟，
+     * 表现为 ret=0 但响应里没有 nickname。失败后延迟重试。
+     */
+    private static final int MAX_PROFILE_RETRY = 3;
+    private static final long PROFILE_RETRY_DELAY_MS = 1200L;
+
+    /** 重试用的主线程 Handler。 */
+    private final android.os.Handler uiHandler =
+            new android.os.Handler(android.os.Looper.getMainLooper());
+
     /** 本类实例（成员变量持有，SDK 内部对 listener 是弱引用，不能临时 new）。 */
     private static volatile QqSdkAuth sInstance;
 
@@ -196,14 +207,28 @@ public final class QqSdkAuth {
         return handled;
     }
 
-    /** 注销：清掉 SDK 内部与本地登录态。 */
+    /**
+     * 注销：清掉 SDK 内部与本地登录态。
+     *
+     * <p>注意顺序：先清 SDK 的会话，再清本地缓存，避免切换账号时
+     * 旧缓存残留被后续 {@code fetchProfile} 误用。
+     */
     public void logout(Context context) {
+        try {
+            // 清掉 SDK 内部持有的 openid/token，防止下一个账号登录时串用
+            tencent.setOpenId(null);
+            tencent.setAccessToken(null, null);
+        } catch (Throwable t) {
+            Log.w(TAG, "reset tencent session failed", t);
+        }
         try {
             tencent.logout(context);
         } catch (Throwable t) {
             Log.w(TAG, "logout failed", t);
         }
+        // 彻底清掉本地缓存（含上个账号的昵称/头像）
         prefs.edit().clear().apply();
+        Log.i(TAG, "logout: SDK 会话与本地缓存均已清空");
     }
 
     /** QQ 是否已安装（3.5.9+ 结果会被内存缓存）。 */
@@ -221,27 +246,54 @@ public final class QqSdkAuth {
 
     // ------------------------------------------------------------------ 用户信息
 
-    /** 拉取昵称头像（异步，回调在主线程）。 */
+    /**
+     * 拉取昵称头像（异步，回调在主线程）。
+     *
+     * <p>这里做了三件事来解决「换个 QQ 号就取不到昵称」的问题：
+     * <ol>
+     *   <li><b>不再用本地缓存覆盖 SDK 实例</b>：旧实现无条件 {@code loadSession()} 后
+     *       {@code setOpenId/setAccessToken}，切换账号时会把刚登录成功的新 token
+     *       覆盖成上一个账号的，导致请求必然失败；</li>
+     *   <li><b>首次失败自动重试</b>：QQ 的 {@code user/get_simple_userinfo} 对新登录会话
+     *       存在服务端同步延迟，返回的 JSON 里可能没有 nickname。因此失败后延迟重试，
+     *       而不是直接报错；</li>
+     *   <li><b>明确区分"接口错误"与"数据未就绪"</b>，只对后者重试。</li>
+     * </ol>
+     */
     public void fetchProfile(Context context, final ProfileCallback callback) {
-        // 防御：确保 SDK 实例上绑定了当前会话的 token，否则 get_simple_userinfo 会返回 ret!=0
-        Session current = loadSession();
-        if (current != null && current.isUsable()) {
-            tencent.setOpenId(current.openId);
-            tencent.setAccessToken(current.accessToken,
-                    String.valueOf(Math.max(0,
-                            (current.expireAtMillis - System.currentTimeMillis()) / 1000L)));
-        }
+        fetchProfileInternal(context, callback, 0);
+    }
 
+    /**
+     * 带显式会话的拉取：登录成功后应立即用刚拿到的 session 调这个重载，
+     * 避免 {@link #fetchProfile} 依赖本地缓存而拿到上一个账号的 openid。
+     *
+     * @param session 刚登录成功拿到的会话（非 null 时会重新绑定到 SDK 实例）
+     */
+    public void fetchProfile(Context context, Session session, ProfileCallback callback) {
+        if (session != null && session.isUsable()) {
+            tencent.setOpenId(session.openId);
+            tencent.setAccessToken(session.accessToken, String.valueOf(Math.max(0,
+                    (session.expireAtMillis - System.currentTimeMillis()) / 1000L)));
+            Log.i(TAG, "fetchProfile: 使用登录回调中的会话，openid=" + session.openId);
+        }
+        fetchProfileInternal(context, callback, 0);
+    }
+
+    /** @param attempt 已重试次数（0 = 首次） */
+    private void fetchProfileInternal(final Context context, final ProfileCallback callback,
+                                      final int attempt) {
         userInfo = new UserInfo(context, tencent.getQQToken());
         userInfo.getUserInfo(new IUiListener() {
             @Override
             public void onComplete(Object response) {
                 JSONObject json = asJson(response);
-                Log.i(TAG, "getUserInfo onComplete: " + json);
+                Log.i(TAG, "getUserInfo onComplete (attempt=" + attempt + "): " + json);
 
                 // QQ 把业务错误也放在 200 响应体里（ret!=0），必须自己判，否则会静默失败
                 int ret = json.optInt("ret", -1);
                 if (ret != 0) {
+                    // ret!=0 属于真正的接口错误，重试无意义
                     callback.onError(ret, describe(ret) + " [ret=" + ret + "] "
                             + json.optString("msg", "") + " | " + json);
                     return;
@@ -253,10 +305,26 @@ public final class QqSdkAuth {
                         json.optString("figureurl_qq_1", ""),
                         json.optString("figureurl_2", ""));
                 String gender = json.optString("gender", "");
+
                 if (TextUtils.isEmpty(nickname)) {
-                    callback.onError(-1, "接口返回成功但没有昵称字段: " + json);
+                    // ret==0 但没有昵称：典型的"服务端资料尚未同步完成"，重试大概率能拿到
+                    if (attempt < MAX_PROFILE_RETRY) {
+                        Log.w(TAG, "ret=0 但无 nickname，第 " + (attempt + 1)
+                                + " 次重试（延迟 " + PROFILE_RETRY_DELAY_MS + "ms）");
+                        uiHandler.postDelayed(new Runnable() {
+                            @Override
+                            public void run() {
+                                fetchProfileInternal(context, callback, attempt + 1);
+                            }
+                        }, PROFILE_RETRY_DELAY_MS);
+                        return;
+                    }
+                    callback.onError(-1, "接口返回 ret=0 但连续 "
+                            + (MAX_PROFILE_RETRY + 1) + " 次都没有昵称字段。"
+                            + "该 QQ 号可能未完善资料，或服务端仍在同步。原始响应：" + json);
                     return;
                 }
+
                 prefs.edit().putString(K_NICK, nickname).putString(K_AVATAR, avatar)
                         .putString(K_GENDER, gender).apply();
                 callback.onProfile(new Profile(nickname, avatar, gender));
