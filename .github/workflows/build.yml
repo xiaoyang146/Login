@@ -1,0 +1,37 @@
+name: Build JAR
+
+on:
+  push:
+    branches: [main, master]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Compile and package
+        run: |
+          mkdir -p out build/META-INF
+          javac -encoding UTF-8 -d out $(find src -name '*.java')
+          echo "Main-Class: com.example.mixauth.MixAuthLoginApp" > build/META-INF/MANIFEST.MF
+          jar cfm mixauth-login.jar build/META-INF/MANIFEST.MF -C out .
+          ls -la mixauth-login.jar
+
+      - name: Smoke test (headless, no real scan)
+        run: |
+          timeout 30 java -jar mixauth-login.jar qq --no-gui --timeout=8 --interval=2000 || true
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: mixauth-login-jar
+          path: mixauth-login.jar

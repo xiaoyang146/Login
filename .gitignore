@@ -1,0 +1,6 @@
+out/
+build/
+*.class
+mixauth-login.jar
+mixauth-qr-*.*
+login-result-*.json
