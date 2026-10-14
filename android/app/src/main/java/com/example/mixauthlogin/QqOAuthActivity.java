@@ -4,12 +4,15 @@ import android.app.Activity;
 import android.app.ProgressDialog;
 import android.content.Intent;
 import android.os.Bundle;
+import android.webkit.WebResourceError;
+import android.webkit.WebResourceRequest;
 import android.webkit.WebView;
 import android.webkit.WebViewClient;
 import android.widget.Toast;
 
 import org.json.JSONObject;
 
+import java.util.Locale;
 import java.util.Map;
 
 /**
@@ -26,6 +29,8 @@ public class QqOAuthActivity extends Activity {
     private WebView web;
     private ProgressDialog dialog;
     private volatile boolean finished = false;
+    private String currentState;
+    private boolean warnedUnknownScheme = false;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -46,7 +51,38 @@ public class QqOAuthActivity extends Activity {
                 if (url.startsWith(QqLogin.CALLBACK_PREFIX)) {
                     return handleRedirect(url);
                 }
+                // QQ 登录页会尝试 wtloginmqq:// 等客户端私有协议来“唤起手机 QQ
+                // 一键登录”。WebView 不处理这些协议，放行会整页报
+                // net::ERR_UNKNOWN_URL_SCHEME；这里吞掉该导航，让登录页保留，
+                // 用户可继续使用页面内的“扫码 / 账号密码”登录。
+                String lower = url.toLowerCase(Locale.ROOT);
+                if (!lower.startsWith("http://") && !lower.startsWith("https://")) {
+                    if (!warnedUnknownScheme) {
+                        warnedUnknownScheme = true;
+                        Toast.makeText(QqOAuthActivity.this,
+                                "已跳过 QQ 客户端唤起，请在登录页使用扫码或账号密码登录",
+                                Toast.LENGTH_LONG).show();
+                    }
+                    return true;
+                }
                 return false;
+            }
+
+            @Override
+            public boolean shouldOverrideUrlLoading(WebView view, WebResourceRequest request) {
+                return shouldOverrideUrlLoading(view, request.getUrl().toString());
+            }
+
+            @Override
+            public void onReceivedError(WebView view, WebResourceRequest request,
+                                        WebResourceError error) {
+                // 兜底：万一还是导航到了未知协议，直接回到授权页而不是停在错误页
+                if (request != null && request.isForMainFrame()
+                        && error != null && error.getErrorCode()
+                        == WebViewClient.ERROR_UNKNOWN_URL_SCHEME) {
+                    view.loadUrl(QqLogin.authorizeUrl(
+                            currentState == null ? QqLogin.newState() : currentState));
+                }
             }
 
             @Override
@@ -55,7 +91,8 @@ public class QqOAuthActivity extends Activity {
             }
         });
 
-        web.loadUrl(QqLogin.authorizeUrl(QqLogin.newState()));
+        currentState = QqLogin.newState();
+        web.loadUrl(QqLogin.authorizeUrl(currentState));
         dialog = ProgressDialog.show(this, "QQ 登录", "正在加载授权页，请登录并授权...", true, false);
     }
 
