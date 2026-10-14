@@ -174,17 +174,36 @@ public class MainActivity extends Activity {
         qq.fetchProfile(MainActivity.this, new QqSdkAuth.ProfileCallback() {
             @Override
             public void onProfile(final QqSdkAuth.Profile profile) {
-                if (!TextUtils.isEmpty(profile.nickname)) {
-                    nickView.setText(profile.nickname);
-                }
+                nickView.setText(profile.nickname);
                 if (!TextUtils.isEmpty(profile.avatarUrl)) {
                     loadAvatar(profile.avatarUrl);
                 }
             }
 
             @Override
-            public void onError(int code, String message) {
+            public void onError(final int code, final String message) {
                 Log.w(TAG, "fetchProfile 失败: " + code + " / " + message);
+                // 不能让界面一直停在「正在获取昵称…」，把失败原因显式暴露出来
+                ui.post(new Runnable() {
+                    @Override
+                    public void run() {
+                        nickView.setText("昵称获取失败（点击重试）");
+                        nickView.setOnClickListener(new View.OnClickListener() {
+                            @Override
+                            public void onClick(View v) {
+                                nickView.setText("（正在获取昵称…）");
+                                fetchQqProfile();
+                            }
+                        });
+                        new AlertDialog.Builder(MainActivity.this)
+                                .setTitle("获取昵称失败")
+                                .setMessage("错误码 " + code + "\n" + message
+                                        + "\n\n登录本身是成功的，openid 与 token 已拿到，"
+                                        + "只是 get_simple_userinfo 接口没返回昵称。")
+                                .setPositiveButton("知道了", null)
+                                .show();
+                    }
+                });
             }
         });
     }

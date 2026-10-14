@@ -223,28 +223,50 @@ public final class QqSdkAuth {
 
     /** 拉取昵称头像（异步，回调在主线程）。 */
     public void fetchProfile(Context context, final ProfileCallback callback) {
+        // 防御：确保 SDK 实例上绑定了当前会话的 token，否则 get_simple_userinfo 会返回 ret!=0
+        Session current = loadSession();
+        if (current != null && current.isUsable()) {
+            tencent.setOpenId(current.openId);
+            tencent.setAccessToken(current.accessToken,
+                    String.valueOf(Math.max(0,
+                            (current.expireAtMillis - System.currentTimeMillis()) / 1000L)));
+        }
+
         userInfo = new UserInfo(context, tencent.getQQToken());
         userInfo.getUserInfo(new IUiListener() {
             @Override
             public void onComplete(Object response) {
                 JSONObject json = asJson(response);
+                Log.i(TAG, "getUserInfo onComplete: " + json);
+
+                // QQ 把业务错误也放在 200 响应体里（ret!=0），必须自己判，否则会静默失败
+                int ret = json.optInt("ret", -1);
+                if (ret != 0) {
+                    callback.onError(ret, describe(ret) + " [ret=" + ret + "] "
+                            + json.optString("msg", "") + " | " + json);
+                    return;
+                }
+
                 String nickname = json.optString("nickname", "");
                 String avatar = firstNonEmpty(
                         json.optString("figureurl_qq_2", ""),
                         json.optString("figureurl_qq_1", ""),
                         json.optString("figureurl_2", ""));
                 String gender = json.optString("gender", "");
-                Profile p = new Profile(nickname, avatar, gender);
-                if (!TextUtils.isEmpty(nickname)) {
-                    prefs.edit().putString(K_NICK, nickname).putString(K_AVATAR, avatar)
-                            .putString(K_GENDER, gender).apply();
+                if (TextUtils.isEmpty(nickname)) {
+                    callback.onError(-1, "接口返回成功但没有昵称字段: " + json);
+                    return;
                 }
-                callback.onProfile(p);
+                prefs.edit().putString(K_NICK, nickname).putString(K_AVATAR, avatar)
+                        .putString(K_GENDER, gender).apply();
+                callback.onProfile(new Profile(nickname, avatar, gender));
             }
 
             @Override
             public void onError(UiError e) {
-                callback.onError(e.errorCode, e.errorMessage);
+                Log.e(TAG, "getUserInfo onError: " + e.errorCode + " / " + e.errorMessage);
+                callback.onError(e.errorCode, describe(e.errorCode) + "\n[" + e.errorCode + "] "
+                        + e.errorMessage + "\n" + e.errorDetail);
             }
 
             @Override
@@ -317,6 +339,13 @@ public final class QqSdkAuth {
             long expireAt = System.currentTimeMillis() + expiresIn * 1000L;
             Session session = new Session(openId, token, expireAt);
             saveSession(session);
+
+            // 关键：把登录态绑回 SDK 实例。
+            // 否则后续 UserInfo/requestAsync 可能拿着空 token 去请求，返回 ret!=0（表现为拿不到昵称）。
+            tencent.setOpenId(openId);
+            tencent.setAccessToken(token, String.valueOf(Math.max(0, expiresIn)));
+            Log.i(TAG, "session bound to Tencent instance, openid=" + openId
+                    + ", expiresIn=" + expiresIn + "s");
 
             Callback cb = pendingCallback;
             if (cb != null) {
