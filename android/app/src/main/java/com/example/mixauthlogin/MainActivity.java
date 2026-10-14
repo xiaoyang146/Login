@@ -11,6 +11,13 @@ import android.os.Looper;
 import android.widget.Button;
 import android.widget.ImageView;
 import android.widget.TextView;
+import android.widget.Toast;
+
+import com.tencent.connect.UserInfo;
+import com.tencent.connect.common.Constants;
+import com.tencent.tauth.IUiListener;
+import com.tencent.tauth.Tencent;
+import com.tencent.tauth.UiError;
 
 import org.json.JSONObject;
 
@@ -34,10 +41,20 @@ public class MainActivity extends Activity {
     private AtomicBoolean running;   // 非 null 且 true 时继续轮询
     private String currentType = "qq";
 
+    /** QQ 互联官方 SDK 实例（SSO 直连手机 QQ 授权）。 */
+    private Tencent tencent;
+
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
+
+        // 初始化 QQ 互联 SDK
+        try {
+            tencent = Tencent.createInstance(QqLogin.APP_ID, getApplicationContext());
+        } catch (Exception e) {
+            tencent = null;
+        }
 
         qrView = findViewById(R.id.qrView);
         statusView = findViewById(R.id.statusView);
@@ -45,13 +62,100 @@ public class MainActivity extends Activity {
         Button wxBtn = findViewById(R.id.wxBtn);
         Button refreshBtn = findViewById(R.id.refreshBtn);
 
-        qqBtn.setOnClickListener(v ->
-                startActivityForResult(new Intent(MainActivity.this, QqOAuthActivity.class), 100));
+        qqBtn.setOnClickListener(v -> startQqLogin());
         wxBtn.setOnClickListener(v -> startLogin("wechat"));
         refreshBtn.setOnClickListener(v -> startLogin(currentType));
     }
 
     // ============================ 登录流程 ============================
+
+    // ============================ QQ 官方互联 SSO ============================
+
+    /**
+     * QQ 登录入口：优先调起手机 QQ 客户端完成授权（SSO 一键登录）；
+     * 未安装手机 QQ 或环境不支持时，回退到内置 WebView 授权页（QqOAuthActivity）。
+     */
+    private void startQqLogin() {
+        statusView.setText("正在拉起 QQ 授权...");
+        if (tencent != null && tencent.isSupportSSOLogin(this)) {
+            tencent.login(this, QqLogin.SCOPE, ssoListener);
+        } else {
+            startActivityForResult(new Intent(MainActivity.this, QqOAuthActivity.class), 100);
+        }
+    }
+
+    /** SSO 授权结果回调（SDK 保证在主线程回调）。 */
+    private final IUiListener ssoListener = new IUiListener() {
+        @Override
+        public void onComplete(Object response) {
+            if (!(response instanceof JSONObject)) {
+                statusView.setText("QQ 授权回调数据异常");
+                return;
+            }
+            JSONObject resp = (JSONObject) response;
+            String openid = resp.optString("openid", "");
+            String accessToken = resp.optString("access_token", "");
+            statusView.setText("QQ 授权成功，正在获取用户资料...");
+            requestSsoUserInfo(openid, accessToken);
+        }
+
+        @Override
+        public void onError(UiError e) {
+            String m = e == null ? "未知错误"
+                    : (e.errorMessage + " (code=" + e.errorCode + ", detail=" + e.errorDetail + ")");
+            statusView.setText("QQ 登录失败: " + m);
+            Toast.makeText(MainActivity.this, m, Toast.LENGTH_LONG).show();
+        }
+
+        @Override
+        public void onCancel() {
+            statusView.setText("QQ 登录已取消");
+        }
+    };
+
+    /** SSO 拿到 access_token/openid 后，通过 SDK 补齐昵称、头像等用户资料。 */
+    private void requestSsoUserInfo(final String openid, final String accessToken) {
+        try {
+            new UserInfo(this, tencent.getQQToken()).getUserInfo(new IUiListener() {
+                @Override
+                public void onComplete(Object o) {
+                    JSONObject info = new JSONObject();
+                    try {
+                        info.put("openid", openid);
+                        if (o instanceof JSONObject) {
+                            JSONObject u = (JSONObject) o;
+                            info.put("ret", u.optInt("ret", -1));
+                            if (u.has("nickname")) {
+                                info.put("nickname", u.optString("nickname"));
+                            }
+                            if (u.has("figureurl_qq_2")) {
+                                info.put("figureurl_qq_2", u.optString("figureurl_qq_2"));
+                            }
+                        }
+                        info.put("access_token", accessToken != null && accessToken.length() > 12
+                                ? accessToken.substring(0, 12) + "..." : accessToken);
+                    } catch (Exception ignored) {
+                    }
+                    showSuccess("QQ（官方互联·APP 授权）",
+                            toPretty(info, "SSO 授权成功，用户资料未返回"));
+                }
+
+                @Override
+                public void onError(UiError e) {
+                    showSuccess("QQ（官方互联·APP 授权）",
+                            "openid=" + openid + "\n获取用户资料失败: "
+                                    + (e == null ? "未知错误" : e.errorMessage));
+                }
+
+                @Override
+                public void onCancel() {
+                    statusView.setText("获取 QQ 用户资料被取消");
+                }
+            });
+        } catch (Exception e) {
+            statusView.setText("QQ 用户资料请求异常: " + msg(e));
+        }
+    }
 
     private void startLogin(String type) {
         currentType = type;
@@ -226,6 +330,11 @@ public class MainActivity extends Activity {
     @Override
     protected void onActivityResult(int requestCode, int resultCode, Intent data) {
         super.onActivityResult(requestCode, resultCode, data);
+        // QQ 互联 SDK 的 SSO 跳转回传
+        if (requestCode == Constants.REQUEST_LOGIN || requestCode == Constants.REQUEST_APPBAR) {
+            Tencent.onActivityResultData(requestCode, resultCode, data, ssoListener);
+            return;
+        }
         if (requestCode == 100) {
             if (resultCode == RESULT_OK && data != null) {
                 showSuccess("QQ（官方互联）", data.getStringExtra("info"));

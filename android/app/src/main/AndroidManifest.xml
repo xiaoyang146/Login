@@ -3,11 +3,26 @@
 
     <!-- 访问 MixAuth 服务需要网络 -->
     <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+    <uses-permission android:name="android.permission.ACCESS_WIFI_STATE" />
+
+    <!-- Android 11+ 包可见性：SSO 需要探测手机 QQ / TIM 是否安装 -->
+    <queries>
+        <package android:name="com.tencent.mobileqq" />
+        <package android:name="com.tencent.tim" />
+    </queries>
 
     <application
         android:allowBackup="true"
         android:label="MixAuth登录"
         android:theme="@android:style/Theme.Material.Light.DarkActionBar">
+
+        <!-- QQ互联 SDK 内部中转 Activity（SSO 跳转与回跳必需） -->
+        <activity
+            android:name="com.tencent.connect.common.AssistActivity"
+            android:configChanges="orientation|keyboardHidden|screenSize"
+            android:screenOrientation="behind"
+            android:theme="@android:style/Theme.Translucent.NoTitleBar" />
 
         <activity
             android:name=".MainActivity"

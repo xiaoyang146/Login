@@ -52,4 +52,8 @@ android {
     }
 }
 
-// 纯 Java 实现，零第三方依赖（org.json 为 Android 系统内置）
+dependencies {
+    // QQ互联官方 SDK：支持直接调起手机 QQ 客户端完成授权（SSO 一键登录）
+    // 未安装手机 QQ 或环境不支持时，代码会回退到内置 WebView 授权页流程
+    implementation 'com.tencent.tauth:qq-open-sdk:3.53.0'
+}
