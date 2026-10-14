@@ -125,7 +125,20 @@ keytool -list -v -keystore android/qileys.keystore -alias qileys -storepass andr
 
 把输出里的 `MD5: XX:XX:...` 去掉冒号、转小写，填进 connect.qq.com 该应用的「应用签名」。
 
-**换 AppID 要改三处**（漏一处就失败）：
+### 本仓库当前的实测值（已构建验证）
+
+用仓库自带的 `qileys.keystore` 构建出来的 APK，签名证书固定为：
+
+| 项目 | 值 |
+|---|---|
+| 证书 Subject | `CN=Qileys, OU=Dev, O=Qileys, L=Shenzhen, S=Guangdong, C=CN` |
+| **MD5（填后台用，无冒号小写）** | **`e1febc2de0cc9997f10469db0829075c`** |
+| SHA1 | `2B:9C:FD:F9:E6:4A:D4:A7:39:10:7D:F3:D3:D7:9E:86:C4:BC:9E:10` |
+
+也就是说，**只要后端登记 MD5 为 `e1febc2de0cc9997f10469db0829075c`、包名为 `com.android.qileys`，
+本仓库构建出的 APK 就能直接通过 QQ 的签名校验**。
+
+> 换 AppID 要改三处（漏一处就失败）：
 
 1. `android/app/build.gradle` → `QQ_APP_ID`；
 2. `AndroidManifest.xml` → `AuthActivity` 的 `<data android:scheme="tencent102064194" />`；
@@ -172,8 +185,24 @@ protected void onActivityResult(int req, int res, Intent data) {
 | 装了 QQ 却仍走网页授权 | Android 11+ 缺 `<queries>`；或 SDK 缓存了"未安装"，调 `Tencent.resetTargetAppInfoCache()` |
 | `NoClassDefFoundError: android.support.v4.content.FileProvider` | SDK 内部仍用旧 support 库的 FileProvider，需保留 `com.android.support:support-v4:28.0.0` 依赖 + Manifest 里的 provider 声明 |
 | 构建报 `Could not find com.android.support:support-v4` | 需要 `maven.google.com` 仓库（本工程 `dependencyResolutionManagement` 已含 `google()`） |
+| 编译报 `找不到符号: 类 Fragment` | SDK 的 `login()` 有 `android.support.v4.app.Fragment` 重载，javac 必须能解析全部重载，所以 support-v4 是**编译期硬依赖**，不能省 |
 | 混淆后崩溃 | 加 keep 规则：`-keep class com.tencent.** { *; }` |
 | 上架审核被拒 | 隐私政策里必须声明引用了「QQ互联SDK」并说明采集范围 |
+
+---
+
+## 六·五、本次改动的验证记录
+
+代码不是"写完就交"，以下都实际跑过：
+
+| 验证项 | 方法 | 结果 |
+|---|---|---|
+| SDK API 签名是否正确 | `javap` 反编译 `open_sdk_3.5.19` 的 `Tencent` / `IUiListener` / `UserInfo` / `Constants` | ✅ `IUiListener` 多出 `onWarning(int)`，`Constants` 里**没有** `GRAPH_SIMPLE_USER_INFO`，`Tencent` **没有**实例方法 `onActivityResult`；代码已按真实签名编写 |
+| Java 代码能否编译 | `javac` 直接对 `android.jar` + SDK jar 编译全部 6 个源文件 | ✅ 退出码 0 |
+| 完整 Gradle 构建 | `gradle 8.7 + AGP 8.4.2`，`assembleDebug` | ✅ `BUILD SUCCESSFUL`，产出 `app-debug.apk`（947 KB） |
+| APK 签名是否稳定 | `keytool -printcert` + 解析 PKCS#7 | ✅ 证书 MD5 = `e1febc2de0cc9997f10469db0829075c` |
+| 运行时会否缺 FileProvider | 解包 dex 检索类名 | ✅ `android/support/v4/content/FileProvider` 与 `android/support/v4/app/Fragment` 均在 `classes.dex` 中 |
+| CI 能否出包 | GitHub Actions | 见仓库 Actions 页面 |
 
 ---
 
