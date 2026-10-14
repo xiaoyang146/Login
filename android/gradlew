@@ -1,0 +1,6 @@
+#!/bin/sh
+# Gradle wrapper 启动脚本（精简版）
+DIR=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
+exec java -classpath "$DIR/gradle/wrapper/gradle-wrapper.jar" \
+  -Dorg.gradle.appname=gradlew \
+  org.gradle.wrapper.GradleWrapperMain "$@"

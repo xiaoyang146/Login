@@ -4,3 +4,10 @@ build/
 mixauth-login.jar
 mixauth-qr-*.*
 login-result-*.json
+
+# Android
+android/.gradle/
+android/build/
+android/app/build/
+android/local.properties
+android/.idea/
