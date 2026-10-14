@@ -53,7 +53,8 @@ android {
 }
 
 dependencies {
-    // QQ互联官方 SDK：支持直接调起手机 QQ 客户端完成授权（SSO 一键登录）
-    // 未安装手机 QQ 或环境不支持时，代码会回退到内置 WebView 授权页流程
-    implementation 'com.tencent.tauth:qq-open-sdk:3.53.0'
+    // QQ互联官方 SDK（3.5.19，官方下载并内置到 libs，避免依赖第三方仓库）：
+    // 支持直接调起手机 QQ 客户端完成授权（SSO 一键登录）。
+    // 未安装手机 QQ 或环境不支持时，代码会回退到内置 WebView 授权页流程。
+    implementation files('libs/open_sdk_3.5.19_r9483ffc7_lite.jar')
 }
