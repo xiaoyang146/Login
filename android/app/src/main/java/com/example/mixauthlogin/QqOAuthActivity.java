@@ -76,10 +76,11 @@ public class QqOAuthActivity extends Activity {
             @Override
             public void onReceivedError(WebView view, WebResourceRequest request,
                                         WebResourceError error) {
-                // 兜底：万一还是导航到了未知协议，直接回到授权页而不是停在错误页
+                // 兜底：万一还是导航到了未知协议，直接回到授权页而不是停在错误页。
+                // WebViewClient.ERROR_UNKNOWN_URL_SCHEME 在 SDK 中为 @hide 常量，
+                // 其值为 -10，这里直接用数值。
                 if (request != null && request.isForMainFrame()
-                        && error != null && error.getErrorCode()
-                        == WebViewClient.ERROR_UNKNOWN_URL_SCHEME) {
+                        && error != null && error.getErrorCode() == -10) {
                     view.loadUrl(QqLogin.authorizeUrl(
                             currentState == null ? QqLogin.newState() : currentState));
                 }
