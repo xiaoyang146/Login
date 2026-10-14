@@ -138,7 +138,7 @@ public class MainActivity extends Activity {
                     info.put("头像", d.optString("avatar", "?"));
                 } catch (Exception ignored) {
                 }
-                return State.success(info.toString(2));
+                return State.success(toPretty(info, "登录成功（响应解析失败）"));
             }
             if ("65".equals(code) || message.contains("已失效") || message.contains("过期")) {
                 return State.expired("二维码已失效，请点击重新生成");
@@ -163,7 +163,7 @@ public class MainActivity extends Activity {
                 }
             } catch (Exception ignored) {
             }
-            return State.success(info.length() == 0 ? "登录成功（响应中暂无用户字段）" : info.toString(2));
+            return State.success(toPretty(info, "登录成功（响应中暂无用户字段）"));
         }
         String err = d.optString("wx_errcode", "");
         switch (err) {
@@ -202,6 +202,18 @@ public class MainActivity extends Activity {
 
     private static String typeName(String type) {
         return "wechat".equals(type) ? "微信" : "QQ";
+    }
+
+    /** JSONObject 美化输出，解析异常时返回兜底文案。 */
+    private static String toPretty(JSONObject obj, String fallback) {
+        if (obj.length() == 0) {
+            return fallback;
+        }
+        try {
+            return obj.toString(2);
+        } catch (Exception e) {
+            return fallback;
+        }
     }
 
     private static String msg(Throwable t) {
