@@ -76,12 +76,42 @@ public class MainActivity extends Activity {
      * 未安装手机 QQ 或环境不支持时，回退到内置 WebView 授权页（QqOAuthActivity）。
      */
     private void startQqLogin() {
-        statusView.setText("正在拉起 QQ 授权...");
-        if (tencent != null && tencent.isSupportSSOLogin(this)) {
-            tencent.login(this, QqLogin.SCOPE, ssoListener);
-        } else {
-            startActivityForResult(new Intent(MainActivity.this, QqOAuthActivity.class), 100);
+        // Self-diagnosis before deciding: QQ installed + SDK = force SSO attempt
+        String qqVer = "未安装";
+        try {
+            android.content.pm.PackageInfo pi = getPackageManager()
+                    .getPackageInfo("com.tencent.mobileqq", 0);
+            qqVer = pi == null ? "null" : String.valueOf(pi.versionName);
+        } catch (Throwable t) {
+            qqVer = "查询失败:" + t.getClass().getSimpleName();
         }
+        boolean sdkOk = tencent != null;
+        int ssoJudge = -1;
+        try {
+            ssoJudge = sdkOk && tencent.isSupportSSOLogin(this) ? 1 : 0;
+        } catch (Throwable t) {
+            ssoJudge = -1;
+        }
+
+        Toast.makeText(this, "诊断 -> QQ版本=" + qqVer
+                        + " | SDK实例=" + (sdkOk ? "OK" : "NULL")
+                        + " | SDK可用判定=" + ssoJudge,
+                Toast.LENGTH_LONG).show();
+
+        // 只要系统里能查到手机 QQ，就强制走 SDK 登录（必要时内部启动 SSO）
+        if (!qqVer.contains("失败") && !"未安装".equals(qqVer) && sdkOk && ssoJudge != -1) {
+            statusView.setText("正在拉起手机 QQ 授权（SSO）...");
+            try {
+                tencent.login(this, QqLogin.SCOPE, ssoListener);
+                return;
+            } catch (Throwable t) {
+                Toast.makeText(this, "login 异常: " + t.getClass().getSimpleName()
+                        + " " + t.getMessage(), Toast.LENGTH_LONG).show();
+            }
+        } else {
+            statusView.setText("SSO 条件不满足，进入内置 WebView 授权页");
+        }
+        startActivityForResult(new Intent(MainActivity.this, QqOAuthActivity.class), 100);
     }
 
     /** SSO 授权结果回调（SDK 保证在主线程回调）。 */
