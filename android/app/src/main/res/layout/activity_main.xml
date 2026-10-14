@@ -25,7 +25,9 @@
             android:text="选择登录方式，用手机 QQ / 微信扫码"
             android:textSize="13sp"
             android:textColor="#888888"
-            android:paddingBottom="16dp" />
+            android:paddingBottom="16dp"
+            android:gravity="center"
+            android:textIsSelectable="false" />
 
         <LinearLayout
             android:layout_width="match_parent"
@@ -37,7 +39,7 @@
                 android:layout_width="0dp"
                 android:layout_height="wrap_content"
                 android:layout_weight="1"
-                android:text="QQ 登录"
+                android:text="QQ 登录(官方)"
                 android:textSize="16sp" />
 
             <Space
@@ -49,7 +51,7 @@
                 android:layout_width="0dp"
                 android:layout_height="wrap_content"
                 android:layout_weight="1"
-                android:text="微信登录"
+                android:text="微信登录(第三方)"
                 android:textSize="16sp" />
         </LinearLayout>
 

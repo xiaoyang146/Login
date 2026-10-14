@@ -18,6 +18,11 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
+
+        <!-- QQ互联官方 OAuth 授权页（WebView 内完成授权） -->
+        <activity
+            android:name=".QqOAuthActivity"
+            android:exported="false" />
     </application>
 
 </manifest>

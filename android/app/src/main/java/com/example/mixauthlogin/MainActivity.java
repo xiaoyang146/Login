@@ -2,6 +2,7 @@ package com.example.mixauthlogin;
 
 import android.app.Activity;
 import android.app.AlertDialog;
+import android.content.Intent;
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
 import android.os.Bundle;
@@ -44,7 +45,8 @@ public class MainActivity extends Activity {
         Button wxBtn = findViewById(R.id.wxBtn);
         Button refreshBtn = findViewById(R.id.refreshBtn);
 
-        qqBtn.setOnClickListener(v -> startLogin("qq"));
+        qqBtn.setOnClickListener(v ->
+                startActivityForResult(new Intent(MainActivity.this, QqOAuthActivity.class), 100));
         wxBtn.setOnClickListener(v -> startLogin("wechat"));
         refreshBtn.setOnClickListener(v -> startLogin(currentType));
     }
@@ -219,6 +221,19 @@ public class MainActivity extends Activity {
     private static String msg(Throwable t) {
         String m = t.getMessage();
         return (m == null || m.isEmpty()) ? t.getClass().getSimpleName() : m;
+    }
+
+    @Override
+    protected void onActivityResult(int requestCode, int resultCode, Intent data) {
+        super.onActivityResult(requestCode, resultCode, data);
+        if (requestCode == 100) {
+            if (resultCode == RESULT_OK && data != null) {
+                showSuccess("QQ（官方互联）", data.getStringExtra("info"));
+            } else {
+                String err = data != null ? data.getStringExtra("error") : "用户取消";
+                statusView.setText("QQ 登录失败: " + (err == null ? "未知错误" : err));
+            }
+        }
     }
 
     @Override

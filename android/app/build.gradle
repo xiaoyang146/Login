@@ -10,8 +10,16 @@ android {
         applicationId "com.example.mixauthlogin"
         minSdk 21
         targetSdk 34
-        versionCode 1
-        versionName "1.0"
+        versionCode 2
+        versionName "1.1"
+        // QQ互联官方凭据：APP_ID 公开无妨；APP_KEY 从构建环境变量传入（GitHub Actions secret）
+        buildConfigField 'String', 'QQ_APP_ID', '"102064194"'
+        buildConfigField 'String', 'QQ_APP_KEY', "\"${System.getenv('QQ_APP_KEY') ?: ''}\""
+        buildConfigField 'String', 'QQ_REDIRECT_URI', '"tencent102064194://auth.qq.com/"'
+    }
+
+    buildFeatures {
+        buildConfig true
     }
 
     compileOptions {
